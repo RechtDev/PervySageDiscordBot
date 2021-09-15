@@ -1,36 +1,39 @@
-﻿using System;
+﻿using OpenQA.Selenium;
+using OpenQA.Selenium.Firefox;
+using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
-using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Firefox;
 
 namespace PervySageBot.Content.Fetcher
 {
-    class WebsiteScraper
+    internal class WebsiteScraper
     {
-        public IWebDriver WebDriver {get; set;}
+        public IWebDriver WebDriver { get; set; }
         public string Query { get; set; }
-        Uri SelectedAlbumUrl;
+
         public List<string> WebsiteSourcesUrl { get; set; } = new List<string>
         {
             @"https://www.erome.com/"
         };
-        public WebsiteScraper(string query) 
+
+        public WebsiteScraper(string query)
         {
             Query = query;
             FirefoxOptions options = new FirefoxOptions();
             options.AddArgument("--headless");
             WebDriver = new FirefoxDriver(options);
-        }       
+        }
+
         ~WebsiteScraper()
         {
             WebDriver.Quit();
         }
-        public void GetWebsite(out string[] imgUrls)
+
+        public void GetWebsite(out string[] imgUrls, out string RefererUrl)
         {
             StringBuilder FullUrl = new StringBuilder();
             FullUrl.Append(WebsiteSourcesUrl[0]);
@@ -41,8 +44,8 @@ namespace PervySageBot.Content.Fetcher
                 WebDriver.Navigate().GoToUrl(FullUrl.ToString());
                 var Albums = WebDriver.FindElements(By.ClassName("col-lg-2"));
                 IWebElement SelectedAlbum = Albums[SelectRngAblum()].FindElement(By.TagName("a"));
-                SelectedAlbumUrl = new Uri(SelectedAlbum.GetAttribute("href"));
-                WebDriver.Navigate().GoToUrl(SelectedAlbumUrl.AbsoluteUri);
+                RefererUrl = SelectedAlbum.GetAttribute("href");
+                WebDriver.Navigate().GoToUrl(RefererUrl);
                 var imgAttachments = WebDriver.FindElements(By.ClassName("img-front"));
                 if (imgAttachments.Count == 1)
                 {
@@ -67,7 +70,7 @@ namespace PervySageBot.Content.Fetcher
                     {
                         imgUrls[i] = imgAttachments[i].GetAttribute("src");
                     }
-                }   
+                }
                 else
                 {
                     imgUrls = new string[3];
@@ -75,47 +78,26 @@ namespace PervySageBot.Content.Fetcher
                     {
                         imgUrls[i] = imgAttachments[i].GetAttribute("src");
                     }
-                }   
+                }
             }
             finally
             {
-                //WebDriver.Quit();
-            }         
+            }
         }
 
-        public CookieContainer GetSesstionCookies()
+        public async Task<Stream[]> DownloadAttachments(string RefererUrl, params string[] Attachements)
         {
-            //creates container for cookies
-            var Cookies = new CookieContainer();
-            //converts Selenium.Cookie to Net.Cookie
-            foreach (var cookie in WebDriver.Manage().Cookies.AllCookies)
+            HttpClient httpClient = new HttpClient();
+            Stream[] ImgDataStreams = new Stream[Attachements.Length];
+            httpClient.DefaultRequestHeaders.Add("Referer", RefererUrl);
+            for (int i = 0; i < Attachements.Length; i++)
             {
-                System.Net.Cookie netcookie = new System.Net.Cookie()
-                {
-                    Domain = cookie.Domain,
-                    HttpOnly = cookie.IsHttpOnly,
-                    Name = cookie.Name,
-                    Path = cookie.Path,
-                    Secure = cookie.Secure,
-                    Value = cookie.Value,
-                };
-                if (cookie.Expiry.HasValue)
-                    netcookie.Expires = cookie.Expiry.Value;
-                Cookies.Add(netcookie);
+                var response = await httpClient.GetAsync(Attachements[i]);
+                ImgDataStreams[i] = await response.Content.ReadAsStreamAsync();
             }
-            return Cookies;
-        }   
-
-         public async Task DownloadaAttachments(CookieContainer cookies, params string[] Attachements)
-         {
-            //Just takeing one src url and setting it to a Uri instance for testing
-            Uri uri = new Uri(Attachements[0]);
-            //passing the cookies from WebDriver
-            var httpClientHandler = new HttpClientHandler() { CookieContainer = cookies};
-            var client = new HttpClient(httpClientHandler) { BaseAddress = uri};
-            //calling GetStream and waiting for response
-            var response = await client.GetStreamAsync(uri);
-         } 
+            WebDriver.Quit();
+            return ImgDataStreams;
+        }
 
         private int SelectRngAblum()
         {

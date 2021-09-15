@@ -1,4 +1,6 @@
 ﻿using DSharpPlus;
+using DSharpPlus.CommandsNext;
+using PervySageBot.Commands;
 using PervySageBot.Content.Fetcher;
 using System;
 using System.IO;
@@ -31,19 +33,14 @@ namespace PervySageBot
                 Intents = DiscordIntents.AllUnprivileged
                 
             });
-            disClient.MessageCreated += async (s, e) =>
+            var commands = disClient.UseCommandsNext(new CommandsNextConfiguration() 
             {
-                if (e.Message.Content.ToLower().StartsWith("testing"))
-                {
-                    await e.Message.RespondAsync("Bot working! GJ");
-                }
-            };
+                StringPrefixes = new[] {"Pervy Sage "},
+                
+            });
+            commands.RegisterCommands<SearchCommands>();
             await disClient.ConnectAsync();
             await Task.Delay(-1);
-
-            //WebsiteScraper websiteScraper = new WebsiteScraper("ass");
-            //websiteScraper.GetWebsite(out string[] imgUrls);
-            //await websiteScraper.DownloadaAttachments(websiteScraper.GetSesstionCookies(), imgUrls);
         }
     }
 }
